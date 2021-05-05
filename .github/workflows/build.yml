@@ -1,10 +1,15 @@
 name: Build
 
 on:
-  push:
-    branches: [ nextgen ]
-  pull_request:
-    branches: [ nextgen ]
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Build'
+        required: true
+        default: 'Build'
+      home:
+        description: 'location'
+        required: false
 
 jobs:
   build:
@@ -26,9 +31,9 @@ jobs:
           job-id: jdk8
           arguments: genSources build
           gradle-version: wrapper
-      - name: Upload artifact
-        run: |
-          cd build/libs
-          export LB_VERSION=$(find . -regex '.*liquidbounce-[0-9|.]*\.jar')
-          cp $LB_VERSION liquidbounce.jar
-          curl --connect-timeout 30 -m 300 -X POST -F "artifact=@liquidbounce.jar" -H "Authentication: ${{ secrets.NIGHTLY_PASS }}" -F "gh_id=${{ github.event.head_commit.id }}" -F "gh_ref=${{ github.ref }}" -F "gh_message=${{ github.event.head_commit.message }}" -F "gh_timestamp=${{ github.event.head_commit.timestamp }}" -F "lb_version=$LB_VERSION" https://liquidbounce.net/php/nightly/webhook
+      - name: Archive artifacts
+        uses: actions/upload-artifact@v2
+        if: success()
+        with:
+          name: Liquidbounce
+          path: build/libs/.*liquidbounce-[0-9|.]*\.jar
