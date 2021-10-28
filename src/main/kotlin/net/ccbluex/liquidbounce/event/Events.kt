@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.event
 
 import net.ccbluex.liquidbounce.config.Value
+import net.ccbluex.liquidbounce.features.chat.client.packet.User
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.utils.client.Nameable
 import net.minecraft.block.Block
@@ -40,6 +41,18 @@ class GameTickEvent : Event()
 
 // Render events
 
+@Nameable("blockChangeEvent")
+class BlockChangeEvent(val blockPos: BlockPos, val newState: BlockState) : Event()
+
+@Nameable("chunkLoadEvent")
+class ChunkLoadEvent(val x: Int, val z: Int) : Event()
+
+@Nameable("chunkUnloadEvent")
+class ChunkUnloadEvent(val x: Int, val z: Int) : Event()
+
+@Nameable("worldDisconnectEvent")
+class WorldDisconnectEvent : Event()
+
 @Nameable("gameRender")
 class GameRenderEvent : Event()
 
@@ -47,7 +60,7 @@ class GameRenderEvent : Event()
 class EngineRenderEvent(val tickDelta: Float) : Event()
 
 @Nameable("overlayRender")
-class OverlayRenderEvent(val matrixStack: MatrixStack, val tickDelta: Float) : Event()
+class OverlayRenderEvent(val matrices: MatrixStack, val tickDelta: Float) : Event()
 
 @Nameable("screenRender")
 class ScreenRenderEvent(val screen: Screen, val matrices: MatrixStack, mouseX: Int, mouseY: Int, delta: Float) : Event()
@@ -112,6 +125,9 @@ class BlockAttackEvent(val pos: BlockPos) : Event()
 @Nameable("blockMultiplier")
 class BlockVelocityMultiplierEvent(val block: Block, var multiplier: Float) : Event()
 
+@Nameable("blockSlipperinessMultiplier")
+class BlockSlipperinessMultiplierEvent(val block: Block, var slipperiness: Float) : Event()
+
 // Entity events
 
 @Nameable("entityMargin")
@@ -144,7 +160,7 @@ class PlayerUseMultiplier(var forward: Float, var sideways: Float) : Event()
 class PlayerVelocityStrafe(val movementInput: Vec3d, val speed: Float, val yaw: Float, var velocity: Vec3d) : Event()
 
 @Nameable("playerStride")
-class PlayerStrideEvent(var strideOnAir: Boolean) : Event()
+class PlayerStrideEvent(var strideForce: Float) : Event()
 
 @Nameable("playerSafeWalk")
 class PlayerSafeWalkEvent(var isSafeWalk: Boolean = false) : Event()
@@ -183,3 +199,14 @@ class NotificationEvent(val title: String, val message: String, val severity: Se
         ERROR
     }
 }
+
+@Nameable("clientChatMessage")
+class ClientChatMessageEvent(val user: User, val message: String, val chatGroup: ChatGroup) : Event() {
+    enum class ChatGroup {
+        PUBLIC_CHAT,
+        PRIVATE_CHAT
+    }
+}
+
+@Nameable("clientChatError")
+class ClientChatErrorEvent(val error: String) : Event()

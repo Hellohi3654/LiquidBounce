@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.features.module.modules.combat
 
 import net.ccbluex.liquidbounce.config.Choice
+import net.ccbluex.liquidbounce.config.ChoiceConfigurable
 import net.ccbluex.liquidbounce.config.NoneChoice
 import net.ccbluex.liquidbounce.config.ToggleableConfigurable
 import net.ccbluex.liquidbounce.event.AttackEvent
@@ -27,6 +28,8 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.event.repeatable
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
+import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleFly
+import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleLiquidWalk
 import net.ccbluex.liquidbounce.utils.combat.findEnemy
 import net.ccbluex.liquidbounce.utils.entity.FallingPlayer
 import net.ccbluex.liquidbounce.utils.entity.exactPosition
@@ -40,7 +43,7 @@ import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket
 /**
  * Criticals module
  *
- * Automatically crits every time you attack someone
+ * Automatically crits every time you attack someone.
  */
 object ModuleCriticals : Module("Criticals", Category.COMBAT) {
 
@@ -49,30 +52,41 @@ object ModuleCriticals : Module("Criticals", Category.COMBAT) {
      */
     private object ActiveOption : ToggleableConfigurable(this, "Active", true) {
 
-        val modes = choices("Mode", "Packet") {
-            NoneChoice(it)
-            PacketCrit
-            JumpCrit
+        val modes = choices("Mode", PacketCrit) {
+            arrayOf(
+                NoneChoice(it),
+                PacketCrit,
+                JumpCrit
+            )
         }
     }
 
-    private object PacketCrit : Choice("Packet", ActiveOption.modes) {
+    private object PacketCrit : Choice("Packet") {
+
+        override val parent: ChoiceConfigurable
+            get() = ActiveOption.modes
 
         val attackHandler = handler<AttackEvent> { event ->
             if (!ActiveOption.enabled || event.enemy !is LivingEntity) {
                 return@handler
             }
 
+            if (!canCrit(player, false)) {
+                return@handler
+            }
+
             val (x, y, z) = player.exactPosition
 
-            network.sendPacket(PlayerMoveC2SPacket.PositionOnly(x, y + 0.11, z, false))
-            network.sendPacket(PlayerMoveC2SPacket.PositionOnly(x, y + 0.1100013579, z, false))
-            network.sendPacket(PlayerMoveC2SPacket.PositionOnly(x, y + 0.0000013579, z, false))
+            network.sendPacket(PlayerMoveC2SPacket.PositionAndOnGround(x, y + 0.11, z, false))
+            network.sendPacket(PlayerMoveC2SPacket.PositionAndOnGround(x, y + 0.1100013579, z, false))
+            network.sendPacket(PlayerMoveC2SPacket.PositionAndOnGround(x, y + 0.0000013579, z, false))
         }
-
     }
 
-    private object JumpCrit : Choice("Jump", ActiveOption.modes) {
+    private object JumpCrit : Choice("Jump") {
+
+        override val parent: ChoiceConfigurable
+            get() = ActiveOption.modes
 
         // There are diffrent possible jump heights to crit enemy
         //   Hop: 0.1 (like in Wurst-Client)
@@ -88,25 +102,30 @@ object ModuleCriticals : Module("Criticals", Category.COMBAT) {
         val tickHandler = handler<PlayerTickEvent> {
             if (!ActiveOption.enabled) return@handler
 
-            if (!canCrit(player, true))
+            if (!canCrit(player, true)) {
                 return@handler
+            }
 
-            if (optimizeForCooldown && shouldWaitForJump())
+            if (optimizeForCooldown && shouldWaitForJump()) {
                 return@handler
+            }
 
             val (_, _) = world.findEnemy(range) ?: return@handler
 
             if (player.isOnGround) {
+                // Simulate player jumping and send jump stat increment
                 player.jump()
-                player.upwards(height)
+                // Jump upwards specific height, increment not needed because it has already been sent by jump function
+                player.upwards(height, increment = false)
             }
         }
 
     }
 
     fun shouldWaitForJump(initialMotion: Float = 0.42f): Boolean {
-        if (!canCrit(player, true))
+        if (!canCrit(player, true)) {
             return false
+        }
 
         val ticksTillFall = initialMotion / 0.08f
 
@@ -124,11 +143,13 @@ object ModuleCriticals : Module("Criticals", Category.COMBAT) {
             player.yaw
         ).findCollision((ticksTillFall * 2.25f).toInt())?.tick
 
-        if (ticksTillNextOnGround == null)
+        if (ticksTillNextOnGround == null) {
             ticksTillNextOnGround = ticksTillFall.toInt() * 2
+        }
 
-        if (ticksTillNextOnGround + ticksTillFall < nextPossibleCrit)
+        if (ticksTillNextOnGround + ticksTillFall < nextPossibleCrit) {
             return false
+        }
 
         return ticksTillFall + 1.0f < nextPossibleCrit
     }
@@ -138,11 +159,17 @@ object ModuleCriticals : Module("Criticals", Category.COMBAT) {
      */
     private object VisualsConfigurable : ToggleableConfigurable(this, "Visuals", true) {
 
+        val fake by boolean("Fake", false)
+
         val critParticles by int("CritParticles", 1, 0..20)
         val magicParticles by int("MagicParticles", 0, 0..20)
 
         val attackHandler = handler<AttackEvent> { event ->
             if (event.enemy !is LivingEntity) {
+                return@handler
+            }
+
+            if (!fake && !canCrit(player, ignoreOnGround = true)) {
                 return@handler
             }
 
@@ -160,10 +187,11 @@ object ModuleCriticals : Module("Criticals", Category.COMBAT) {
     var ticksOnGround = 0
 
     val repeatable = repeatable {
-        if (player.isOnGround)
+        if (player.isOnGround) {
             ticksOnGround++
-        else
+        } else {
             ticksOnGround = 0
+        }
     }
 
     init {
@@ -181,10 +209,12 @@ object ModuleCriticals : Module("Criticals", Category.COMBAT) {
 
         val player = player
 
-        if (!canCrit(player) || player.velocity.y < -0.08)
+        if (!canCrit(player) || player.velocity.y < -0.08) {
             return false
+        }
 
-        val nextPossibleCrit = (player.attackCooldownProgressPerTick - 0.5f - player.lastAttackedTicks.toFloat()).coerceAtLeast(0.0f)
+        val nextPossibleCrit =
+            (player.attackCooldownProgressPerTick - 0.5f - player.lastAttackedTicks.toFloat()).coerceAtLeast(0.0f)
 
         val gravity = 0.08
 
@@ -199,17 +229,19 @@ object ModuleCriticals : Module("Criticals", Category.COMBAT) {
         val damageLostWaiting = getCooldownDamageFactor(player, ticksTillCrit)
 
         if (damageOnCrit > damageLostWaiting) {
-            if (FallingPlayer.fromPlayer(player).findCollision((ticksTillCrit * 1.3f).toInt()) == null)
+            if (FallingPlayer.fromPlayer(player).findCollision((ticksTillCrit * 1.3f).toInt()) == null) {
                 return true
+            }
         }
 
         return false
     }
 
     fun canCrit(player: ClientPlayerEntity, ignoreOnGround: Boolean = false) =
-        !player.isInLava && !player.isTouchingWater && !player.isClimbing && !player.hasNoGravity() && !player.hasStatusEffect(
-            StatusEffects.LEVITATION
-        ) && !player.hasStatusEffect(StatusEffects.BLINDNESS) && !player.hasStatusEffect(StatusEffects.SLOW_FALLING) && !player.isRiding && (!player.isOnGround || ignoreOnGround)
+        !player.isInLava && !player.isTouchingWater && !player.isClimbing && !player.hasNoGravity() &&
+            !player.hasStatusEffect(StatusEffects.LEVITATION) && !player.hasStatusEffect(StatusEffects.BLINDNESS) &&
+            !player.hasStatusEffect(StatusEffects.SLOW_FALLING) && !player.isRiding && (!player.isOnGround || ignoreOnGround) &&
+            !ModuleFly.enabled && !(ModuleLiquidWalk.enabled && ModuleLiquidWalk.standingOnWater())
 
     fun getCooldownDamageFactorWithCurrentTickDelta(player: PlayerEntity, tickDelta: Float): Float {
         val base = ((player.lastAttackedTicks.toFloat() + tickDelta + 0.5f) / player.attackCooldownProgressPerTick)

@@ -42,24 +42,25 @@ val PlayerEntity.ping: Int
 val ClientPlayerEntity.directionYaw: Float
     get() {
         var rotationYaw = yaw
+        val options = mc.options
 
         // Check if client-user tries to walk backwards (+180 to turn around)
-        if (input.movementForward < 0f) {
+        if (options.keyBack.isPressed) {
             rotationYaw += 180f
         }
 
         // Check which direction the client-user tries to walk sideways
         var forward = 1f
-        if (input.movementForward < 0f) {
+        if (options.keyBack.isPressed) {
             forward = -0.5f
-        } else if (input.movementForward > 0f) {
+        } else if (options.keyForward.isPressed) {
             forward = 0.5f
         }
 
-        if (input.movementSideways > 0f) {
+        if (options.keyLeft.isPressed) {
             rotationYaw -= 90f * forward
         }
-        if (input.movementSideways < 0f) {
+        if (options.keyRight.isPressed) {
             rotationYaw += 90f * forward
         }
 
@@ -69,9 +70,9 @@ val ClientPlayerEntity.directionYaw: Float
 val PlayerEntity.sqrtSpeed: Double
     get() = velocity.sqrtSpeed
 
-fun ClientPlayerEntity.upwards(height: Float) {
+fun ClientPlayerEntity.upwards(height: Float, increment: Boolean = true) {
     // Might be a jump
-    if (isOnGround) {
+    if (isOnGround && increment) {
         // Allows to bypass modern anti cheat techniques
         incrementStat(Stats.JUMP)
     }
@@ -156,13 +157,14 @@ fun getNearestPoint(eyes: Vec3d, box: Box): Vec3d {
 }
 
 fun PlayerEntity.wouldBlockHit(source: PlayerEntity): Boolean {
-    if (!this.isBlocking)
+    if (!this.isBlocking) {
         return false
+    }
 
     val vec3d = source.pos
 
     val facingVec = getRotationVec(1.0f)
-    var deltaPos = vec3d.reverseSubtract(pos).normalize()
+    var deltaPos = vec3d.subtract(pos).normalize()
 
     deltaPos = Vec3d(deltaPos.x, 0.0, deltaPos.z)
 

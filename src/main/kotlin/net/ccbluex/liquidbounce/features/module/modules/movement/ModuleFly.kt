@@ -19,13 +19,16 @@
 package net.ccbluex.liquidbounce.features.module.modules.movement
 
 import net.ccbluex.liquidbounce.config.Choice
+import net.ccbluex.liquidbounce.config.ChoiceConfigurable
 import net.ccbluex.liquidbounce.config.ToggleableConfigurable
-import net.ccbluex.liquidbounce.event.PlayerStrideEvent
-import net.ccbluex.liquidbounce.event.handler
-import net.ccbluex.liquidbounce.event.repeatable
+import net.ccbluex.liquidbounce.event.*
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.utils.entity.strafe
+import net.minecraft.block.Blocks
+import net.minecraft.block.FluidBlock
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket
+import net.minecraft.util.shape.VoxelShapes
 
 /**
  * Fly module
@@ -34,22 +37,25 @@ import net.ccbluex.liquidbounce.utils.entity.strafe
  */
 object ModuleFly : Module("Fly", Category.MOVEMENT) {
 
-    private val modes = choices("Mode", "Vanilla") {
-        Vanilla
-        Jetpack
-    }
+    private val modes = choices("Mode", Vanilla, arrayOf(Vanilla, Jetpack, Verus))
 
     private object Visuals : ToggleableConfigurable(this, "Visuals", true) {
 
         private val stride by boolean("Stride", true)
 
         val strideHandler = handler<PlayerStrideEvent> { event ->
-            event.strideOnAir = stride
+            if (stride) {
+                event.strideForce = 0.1.coerceAtMost(player.velocity.horizontalLength()).toFloat()
+            }
+
         }
 
     }
 
-    private object Vanilla : Choice("Vanilla", modes) {
+    private object Vanilla : Choice("Vanilla") {
+
+        override val parent: ChoiceConfigurable
+            get() = modes
 
         val repeatable = repeatable {
             player.strafe(speed = 0.44)
@@ -62,7 +68,10 @@ object ModuleFly : Module("Fly", Category.MOVEMENT) {
 
     }
 
-    private object Jetpack : Choice("Jetpack", modes) {
+    private object Jetpack : Choice("Jetpack") {
+
+        override val parent: ChoiceConfigurable
+            get() = modes
 
         val repeatable = repeatable {
             if (player.input.jumping) {
@@ -72,6 +81,26 @@ object ModuleFly : Module("Fly", Category.MOVEMENT) {
             }
         }
 
+    }
+
+    private object Verus : Choice("Verus") {
+
+        override val parent: ChoiceConfigurable
+            get() = modes
+
+        val packetHandler = handler<PacketEvent> { event ->
+            if (event.packet is PlayerMoveC2SPacket) {
+                event.packet.onGround = true
+            }
+        }
+        val shapeHandler = handler<BlockShapeEvent> { event ->
+            if (event.state.block !is FluidBlock && event.pos.y < player.y) {
+                event.shape = VoxelShapes.fullCube()
+            }
+        }
+        val jumpEvent = handler<PlayerJumpEvent> { event ->
+            event.cancelEvent()
+        }
     }
 
     init {

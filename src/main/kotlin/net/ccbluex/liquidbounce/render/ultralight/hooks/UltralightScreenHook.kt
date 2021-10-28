@@ -24,40 +24,27 @@ import net.ccbluex.liquidbounce.event.handler
 import net.ccbluex.liquidbounce.render.screen.EmptyScreen
 import net.ccbluex.liquidbounce.render.ultralight.ScreenView
 import net.ccbluex.liquidbounce.render.ultralight.UltralightEngine
-import net.ccbluex.liquidbounce.render.ultralight.js.bindings.QueuedScreen
 import net.ccbluex.liquidbounce.render.ultralight.js.bindings.UltralightJsUi
 import net.ccbluex.liquidbounce.render.ultralight.theme.ThemeManager
 import net.ccbluex.liquidbounce.utils.client.mc
+import net.minecraft.client.gui.screen.TitleScreen
 
 object UltralightScreenHook : Listenable {
-
-    var nextScreen: QueuedScreen? = null
-
-    /**
-     * Check queue every game tick
-     */
-    fun update() {
-        val (screen, parent) = nextScreen ?: return
-
-        // Making it null before opening is very important to make sure it doesn't repeat any further
-        nextScreen = null
-
-        // Open screen with parent
-        screen.open(parent)
-    }
 
     /**
      * Handle opening new screens
      */
     val screenHandler = handler<ScreenEvent> { event ->
+        UltralightEngine.cursorAdapter.unfocus()
+
         val activeView = UltralightEngine.activeView
         if (activeView is ScreenView) {
-            if (activeView.jsEvents._fireViewClose()) {
+            if (activeView.context.events._fireViewClose()) {
                 UltralightEngine.removeView(activeView)
             }
         }
 
-        val screen = event.screen ?: return@handler
+        val screen = event.screen ?: if (mc.world != null) return@handler else TitleScreen()
         val name = UltralightJsUi.get(screen)?.name ?: return@handler
         val page = ThemeManager.page(name) ?: return@handler
 
@@ -66,7 +53,7 @@ object UltralightScreenHook : Listenable {
             loadPage(page)
         }
 
-        mc.openScreen(emptyScreen)
+        mc.setScreen(emptyScreen)
         event.cancelEvent()
     }
 

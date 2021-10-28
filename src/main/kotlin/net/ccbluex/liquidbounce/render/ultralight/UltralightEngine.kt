@@ -23,17 +23,20 @@ import com.labymedia.ultralight.UltralightPlatform
 import com.labymedia.ultralight.UltralightRenderer
 import com.labymedia.ultralight.config.FontHinting
 import com.labymedia.ultralight.config.UltralightConfig
+import com.labymedia.ultralight.gpu.UltralightGPUDriverNativeUtil
 import com.labymedia.ultralight.plugin.logging.UltralightLogLevel
+import net.ccbluex.liquidbounce.render.ultralight.filesystem.BrowserFileSystem
 import net.ccbluex.liquidbounce.render.ultralight.glfw.GlfwClipboardAdapter
 import net.ccbluex.liquidbounce.render.ultralight.glfw.GlfwCursorAdapter
 import net.ccbluex.liquidbounce.render.ultralight.glfw.GlfwInputAdapter
 import net.ccbluex.liquidbounce.render.ultralight.hooks.UltralightIntegrationHook
 import net.ccbluex.liquidbounce.render.ultralight.hooks.UltralightScreenHook
 import net.ccbluex.liquidbounce.render.ultralight.renderer.CpuViewRenderer
-import net.ccbluex.liquidbounce.render.ultralight.theme.ThemeManager
+import net.ccbluex.liquidbounce.utils.client.ThreadLock
 import net.ccbluex.liquidbounce.utils.client.logger
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.minecraft.client.gui.screen.Screen
+import net.minecraft.client.util.math.MatrixStack
 
 object UltralightEngine {
 
@@ -52,8 +55,8 @@ object UltralightEngine {
     /**
      * Ultralight platform and renderer
      */
-    lateinit var platform: UltralightPlatform
-    lateinit var renderer: UltralightRenderer
+    var platform = ThreadLock<UltralightPlatform>()
+    var renderer = ThreadLock<UltralightRenderer>()
 
     /**
      * Glfw
@@ -64,8 +67,6 @@ object UltralightEngine {
 
     /**
      * Views
-     *
-     * todo: might cache views instead of creating new ones
      */
     val activeView: View?
         get() = views.find { it is ScreenView && mc.currentScreen == it.screen }
@@ -86,12 +87,13 @@ object UltralightEngine {
 
         // Load natives from native directory inside root folder
         logger.debug("Loading ultralight natives")
-        UltralightJava.load(resources.binRoot.toPath()) // todo: fix not loading on first startup
+        UltralightJava.load(resources.binRoot.toPath())
+        UltralightGPUDriverNativeUtil.load(resources.binRoot.toPath())
 
         // Setup platform
         logger.debug("Setting up ultralight platform")
-        platform = UltralightPlatform.instance()
-        platform.setConfig(
+        platform.lock(UltralightPlatform.instance())
+        platform.get().setConfig(
             UltralightConfig()
                 .animationTimerDelay(1.0 / refreshRate)
                 .scrollTimerDelay(1.0 / refreshRate)
@@ -99,10 +101,10 @@ object UltralightEngine {
                 .cachePath(resources.cacheRoot.absolutePath)
                 .fontHinting(FontHinting.SMOOTH)
         )
-        platform.usePlatformFontLoader()
-        platform.usePlatformFileSystem(ThemeManager.themesFolder.absolutePath)
-        platform.setClipboard(GlfwClipboardAdapter())
-        platform.setLogger { level, message ->
+        platform.get().usePlatformFontLoader()
+        platform.get().setFileSystem(BrowserFileSystem())
+        platform.get().setClipboard(GlfwClipboardAdapter())
+        platform.get().setLogger { level, message ->
             @Suppress("WHEN_ENUM_CAN_BE_NULL_IN_JAVA")
             when (level) {
                 UltralightLogLevel.ERROR -> logger.debug("[Ultralight/ERR] $message")
@@ -113,7 +115,7 @@ object UltralightEngine {
 
         // Setup renderer
         logger.debug("Setting up ultralight renderer")
-        renderer = UltralightRenderer.create()
+        renderer.lock(UltralightRenderer.create())
 
         // Setup hooks
         UltralightIntegrationHook
@@ -132,17 +134,17 @@ object UltralightEngine {
     }
 
     fun update() {
-        UltralightScreenHook.update()
-
         views.forEach(View::update)
-        renderer.update()
+        renderer.get().update()
     }
 
-    fun render(layer: RenderLayer) {
-        renderer.render()
+    fun render(layer: RenderLayer, matrices: MatrixStack) {
+        renderer.get().render()
 
         views.filter { it.layer == layer }
-            .forEach(View::render)
+            .forEach {
+                it.render(matrices)
+            }
     }
 
     fun resize(width: Long, height: Long) {
@@ -150,13 +152,13 @@ object UltralightEngine {
     }
 
     fun newSplashView() =
-        View(RenderLayer.SPLASH_LAYER, renderer, newViewRenderer()).also { views += it }
+        View(RenderLayer.SPLASH_LAYER, newViewRenderer()).also { views += it }
 
     fun newOverlayView() =
-        View(RenderLayer.OVERLAY_LAYER, renderer, newViewRenderer()).also { views += it }
+        View(RenderLayer.OVERLAY_LAYER, newViewRenderer()).also { views += it }
 
     fun newScreenView(screen: Screen, adaptedScreen: Screen? = null, parentScreen: Screen? = null) =
-        ScreenView(renderer, newViewRenderer(), screen, adaptedScreen, parentScreen).also { views += it }
+        ScreenView(newViewRenderer(), screen, adaptedScreen, parentScreen).also { views += it }
 
     fun removeView(view: View) {
         view.free()

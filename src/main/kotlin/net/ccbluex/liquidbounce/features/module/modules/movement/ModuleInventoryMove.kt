@@ -22,15 +22,29 @@ package net.ccbluex.liquidbounce.features.module.modules.movement
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.minecraft.client.gui.screen.ChatScreen
+import net.minecraft.client.gui.screen.ingame.CreativeInventoryScreen
 import net.minecraft.client.gui.screen.ingame.HandledScreen
-import net.minecraft.client.options.KeyBinding
+import net.minecraft.client.option.KeyBinding
+import net.minecraft.item.ItemGroup
+
+/**
+ * InventoryMove module
+ *
+ * Allows you to walk while an inventory is opened.
+ */
 
 object ModuleInventoryMove : Module("InventoryMove", Category.MOVEMENT) {
 
     val undetectable by boolean("Undetectable", false)
     val passthroughSneak by boolean("PassthroughSneak", false)
 
-    fun shouldHandleInputs(keyBinding: KeyBinding) = enabled && mc.currentScreen !is ChatScreen &&
+    fun shouldHandleInputs(keyBinding: KeyBinding) = enabled && mc.currentScreen !is ChatScreen && !isInCreativeSearchField() &&
         (!undetectable || mc.currentScreen !is HandledScreen<*>) && (passthroughSneak || keyBinding != mc.options.keySneak)
+
+    private fun isInCreativeSearchField(): Boolean {
+        val currentScreen = mc.currentScreen
+
+        return currentScreen is CreativeInventoryScreen && currentScreen.selectedTab == ItemGroup.SEARCH.index
+    }
 
 }

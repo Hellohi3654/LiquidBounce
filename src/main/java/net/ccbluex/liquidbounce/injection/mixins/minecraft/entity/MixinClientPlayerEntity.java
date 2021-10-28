@@ -22,26 +22,37 @@ package net.ccbluex.liquidbounce.injection.mixins.minecraft.entity;
 import net.ccbluex.liquidbounce.event.*;
 import net.ccbluex.liquidbounce.features.module.modules.exploit.ModulePortalMenu;
 import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleNoSlow;
+import net.ccbluex.liquidbounce.features.module.modules.movement.ModulePerfectHorseJump;
+import net.ccbluex.liquidbounce.features.module.modules.render.ModuleNoSwing;
+import net.ccbluex.liquidbounce.features.module.modules.movement.ModuleStep;
 import net.ccbluex.liquidbounce.utils.aiming.Rotation;
 import net.ccbluex.liquidbounce.utils.aiming.RotationManager;
+import net.ccbluex.liquidbounce.utils.client.TickStateManager;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.input.Input;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.entity.MovementType;
+import net.minecraft.network.packet.c2s.play.HandSwingC2SPacket;
+import net.minecraft.util.Hand;
 import net.minecraft.util.math.Vec3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.*;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(ClientPlayerEntity.class)
 public abstract class MixinClientPlayerEntity extends MixinPlayerEntity {
 
-    @Shadow private float lastYaw;
+    @Shadow
+    private float lastYaw;
 
-    @Shadow private float lastPitch;
+    @Shadow
+    private float lastPitch;
 
-    @Shadow public Input input;
+    @Shadow
+    public Input input;
 
     /**
      * Hook entity tick event
@@ -127,9 +138,13 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity {
      */
     @Redirect(method = "tickMovement",
             slice = @Slice(
-                    from = @At(value = "FIELD", target = "Lnet/minecraft/client/network/ClientPlayerEntity;noClip:Z")
+                    from = @At(value = "INVOKE", target = "Lnet/minecraft/entity/player/HungerManager;getFoodLevel()I"),
+                    to = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;isFallFlying()Z")
             ),
-            at = @At(value = "INVOKE", target = "Lnet/minecraft/client/network/ClientPlayerEntity;isUsingItem()Z"),
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lnet/minecraft/client/network/ClientPlayerEntity;isUsingItem()Z"
+            ),
             require = 2,
             allow = 2
     )
@@ -172,4 +187,38 @@ public abstract class MixinClientPlayerEntity extends MixinPlayerEntity {
         }
     }
 
+
+    @Inject(method = "isSneaking", at = @At("HEAD"), cancellable = true)
+    private void injectForcedState(CallbackInfoReturnable<Boolean> cir) {
+        Boolean enforceEagle = TickStateManager.INSTANCE.getEnforcedState().getEnforceEagle();
+
+        if (enforceEagle != null) {
+            cir.setReturnValue(enforceEagle);
+            cir.cancel();
+        }
+    }
+
+    @Inject(method = "isAutoJumpEnabled", cancellable = true, at = @At("HEAD"))
+    private void injectLegitStep(CallbackInfoReturnable<Boolean> cir) {
+        if (ModuleStep.Legit.INSTANCE.isActive()) {
+            cir.setReturnValue(true);
+            cir.cancel();
+        }
+    }
+
+    @Inject(method = "swingHand", at = @At("HEAD"), cancellable = true)
+    private void swingHand(Hand hand, CallbackInfo callbackInfo) {
+        if (ModuleNoSwing.INSTANCE.getEnabled()) {
+            callbackInfo.cancel();
+
+            if (ModuleNoSwing.INSTANCE.getServerSide())
+                MinecraftClient.getInstance().getNetworkHandler().sendPacket(new HandSwingC2SPacket(hand));
+        }
+    }
+    @Inject(method = "getMountJumpStrength", at = @At("HEAD"), cancellable = true)
+    private void hookMountJumpStrength(CallbackInfoReturnable<Float> callbackInfoReturnable) {
+        if (ModulePerfectHorseJump.INSTANCE.getEnabled()) {
+            callbackInfoReturnable.setReturnValue(1f);
+        }
+    }
 }

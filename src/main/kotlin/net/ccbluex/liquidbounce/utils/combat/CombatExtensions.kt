@@ -37,7 +37,7 @@ val globalEnemyConfigurable = EnemyConfigurable()
 /**
  * Configurable to configure which entities and their state (like being dead) should be considered as enemy
  */
-class EnemyConfigurable : Configurable("enemies") {
+class EnemyConfigurable : Configurable("Enemies") {
 
     // Players should be considered as a enemy
     val players by boolean("Players", true)
@@ -101,7 +101,7 @@ class EnemyConfigurable : Configurable("enemies") {
 
                 // Check if enemy is a player and should be considered as enemy
                 if (suspect is PlayerEntity && suspect != mc.player) {
-                    if (attackable && !friends && FriendManager.isFriend(suspect)) {
+                    if (attackable && !friends && FriendManager.isFriend(suspect.toString())) {
                         return false
                     }
 
@@ -126,6 +126,7 @@ class EnemyConfigurable : Configurable("enemies") {
 
 // Extensions
 
+@JvmOverloads
 fun Entity.shouldBeShown(enemyConf: EnemyConfigurable = globalEnemyConfigurable) = enemyConf.isTargeted(this)
 
 fun Entity.shouldBeAttacked(enemyConf: EnemyConfigurable = globalEnemyConfigurable) = enemyConf.isTargeted(

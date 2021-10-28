@@ -23,7 +23,6 @@ import net.ccbluex.liquidbounce.event.repeatable
 import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.features.module.modules.combat.ModuleAutoArmor
-import net.ccbluex.liquidbounce.utils.*
 import net.ccbluex.liquidbounce.utils.client.mc
 import net.ccbluex.liquidbounce.utils.entity.moving
 import net.ccbluex.liquidbounce.utils.item.*
@@ -41,10 +40,11 @@ import net.minecraft.screen.slot.SlotActionType
 import net.minecraft.util.math.BlockPos
 
 /**
- * A anti cactus module
+ * InventoryCleaner module
  *
- * Prevents taking damage from cactus
+ * Automatically throws away useless items and sorts them.
  */
+
 object ModuleInventoryCleaner : Module("InventoryCleaner", Category.PLAYER) {
 
     val inventoryConstraints = InventoryConstraintsConfigurable()
@@ -144,7 +144,14 @@ object ModuleInventoryCleaner : Module("InventoryCleaner", Category.PLAYER) {
                 if (hotbarSlotsToFill != null && currentStackCount < hotbarSlotsToFill.size && weightedItem.slot !in itemsUsedInHotbar) {
                     val hotbarSlotToFill = hotbarSlotsToFill[currentStackCount]
 
-                    if ((isGreedy || hotbarSlotToFill.first.satisfactionCheck?.invoke(inventory.getStack(hotbarSlotToFill.second)) != true) && weightedItem.slot != hotbarSlotToFill.second) {
+                    if ((
+                        isGreedy || hotbarSlotToFill.first.satisfactionCheck?.invoke(
+                                inventory.getStack(
+                                        hotbarSlotToFill.second
+                                    )
+                            ) != true
+                        ) && weightedItem.slot != hotbarSlotToFill.second
+                    ) {
                         if (executeAction(weightedItem.slot, hotbarSlotToFill.second, SlotActionType.SWAP)) {
                             wait(inventoryConstraints.delay.random())
 
@@ -332,6 +339,11 @@ object ModuleInventoryCleaner : Module("InventoryCleaner", Category.PLAYER) {
     }
 }
 
+val HOTBAR_PREDICATE: (o1: WeightedItem, o2: WeightedItem) -> Int =
+    { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+val IDENTITY_PREDICATE: (o1: WeightedItem, o2: WeightedItem) -> Int =
+    { o1, o2 -> o1.itemStack.hashCode().compareTo(o2.itemStack.hashCode()) }
+
 open class WeightedItem(val itemStack: ItemStack, val slot: Int) : Comparable<WeightedItem> {
     open val category: ItemCategory
         get() = ItemCategory(ItemType.NONE, 0)
@@ -352,7 +364,8 @@ class WeightedPrimitiveItem(itemStack: ItemStack, slot: Int, override val catego
         private val COMPARATOR = ComparatorChain<WeightedPrimitiveItem>(
             { o1, o2 -> o1.worth.compareTo(o2.worth) },
             { o1, o2 -> o1.itemStack.count.compareTo(o2.itemStack.count) },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -404,7 +417,8 @@ class WeightedSwordItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemStac
             },
             { o1, o2 -> compareByCondition(o1, o2) { it.itemStack.item is SwordItem } },
             { o1, o2 -> o1.itemStack.item.enchantability },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -433,7 +447,8 @@ class WeightedBowItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemStack,
                     VALUE_ESTIMATOR.estimateValue(o2.itemStack)
                 )
             },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -461,7 +476,8 @@ class WeightedCrossbowItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemS
                     VALUE_ESTIMATOR.estimateValue(o2.itemStack)
                 )
             },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -479,7 +495,8 @@ class WeightedArrowItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemStac
             { o1, o2 ->
                 o1.itemStack.count.compareTo(o2.itemStack.count)
             },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -505,7 +522,8 @@ class WeightedToolItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemStack
             { o1, o2 ->
                 VALUE_ESTIMATOR.estimateValue(o1.itemStack).compareTo(VALUE_ESTIMATOR.estimateValue(o2.itemStack))
             },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -526,7 +544,8 @@ class WeightedRodItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemStack,
             { o1, o2 ->
                 VALUE_ESTIMATOR.estimateValue(o1.itemStack).compareTo(VALUE_ESTIMATOR.estimateValue(o2.itemStack))
             },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -547,7 +566,8 @@ class WeightedShieldItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemSta
             { o1, o2 ->
                 VALUE_ESTIMATOR.estimateValue(o1.itemStack).compareTo(VALUE_ESTIMATOR.estimateValue(o2.itemStack))
             },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -569,7 +589,8 @@ class WeightedFoodItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemStack
             { o1, o2 ->
                 o1.itemStack.count.compareTo(o2.itemStack.count)
             },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -597,7 +618,8 @@ class WeightedBlockItem(itemStack: ItemStack, slot: Int) : WeightedItem(itemStac
                 ) { (it.itemStack.item as BlockItem).block.defaultState.isFullCube(mc.world, BlockPos(0, 0, 0)) }
             },
             { o1, o2 -> o1.itemStack.count.compareTo(o2.itemStack.count) },
-            { o1, o2 -> compareByCondition(o1, o2, WeightedItem::isInHotbar) }
+            HOTBAR_PREDICATE,
+            IDENTITY_PREDICATE
         )
     }
 
@@ -644,7 +666,11 @@ enum class ItemSortChoice(
     LAVA("Lava", ItemCategory(ItemType.BUCKET, 1)),
     MILK("Milk", ItemCategory(ItemType.BUCKET, 2)),
     PEARL("Pearl", ItemCategory(ItemType.PEARL, 0), { it.item == Items.ENDER_PEARL }),
-    GAPPLE("Gapple", ItemCategory(ItemType.GAPPLE, 0), { it.item == Items.GOLDEN_APPLE || it.item == Items.ENCHANTED_GOLDEN_APPLE }),
+    GAPPLE(
+        "Gapple",
+        ItemCategory(ItemType.GAPPLE, 0),
+        { it.item == Items.GOLDEN_APPLE || it.item == Items.ENCHANTED_GOLDEN_APPLE }
+    ),
     FOOD("Food", ItemCategory(ItemType.FOOD, 0), { it.item.foodComponent != null }),
     BLOCK("Block", ItemCategory(ItemType.BLOCK, 0), { it.item is BlockItem }),
     IGNORE("Ignore", null),

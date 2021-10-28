@@ -26,6 +26,7 @@ import net.ccbluex.liquidbounce.utils.aiming.raycast
 import net.ccbluex.liquidbounce.utils.block.getState
 import net.ccbluex.liquidbounce.utils.combat.TargetTracker
 import net.ccbluex.liquidbounce.utils.entity.squaredBoxedDistanceTo
+import net.ccbluex.liquidbounce.utils.item.findHotbarSlot
 import net.minecraft.block.Blocks
 import net.minecraft.item.ItemUsageContext
 import net.minecraft.item.Items
@@ -37,9 +38,9 @@ import net.minecraft.util.Hand
 import net.minecraft.util.hit.HitResult
 
 /**
- * Scaffold module
+ * Ignite module
  *
- * Places blocks under you.
+ * Automatically sets targets around you on fire.
  */
 object ModuleIgnite : Module("Ignite", Category.WORLD) {
 
@@ -51,12 +52,7 @@ object ModuleIgnite : Module("Ignite", Category.WORLD) {
     val networkTickHandler = repeatable { event ->
         val player = mc.player ?: return@repeatable
 
-        val slot = (0..8).firstOrNull {
-            player.inventory.getStack(it).item == Items.LAVA_BUCKET
-        }
-
-        if (slot == null)
-            return@repeatable
+        val slot = findHotbarSlot(Items.LAVA_BUCKET) ?: return@repeatable
 
         for (enemy in targetTracker.enemies()) {
             if (enemy.squaredBoxedDistanceTo(player) > 6.0 * 6.0) {
@@ -67,21 +63,24 @@ object ModuleIgnite : Module("Ignite", Category.WORLD) {
 
             val state = pos.getState()
 
-            if (state?.block == Blocks.LAVA)
+            if (state?.block == Blocks.LAVA) {
                 continue
+            }
 
             val currentTarget = updateTarget(pos, true) ?: continue
 
             val rotation = currentTarget.rotation.fixedSensitivity() ?: continue
             val rayTraceResult = raycast(4.5, rotation) ?: return@repeatable
 
-            if (rayTraceResult.type != HitResult.Type.BLOCK)
+            if (rayTraceResult.type != HitResult.Type.BLOCK) {
                 continue
+            }
 
-            player.networkHandler.sendPacket(PlayerMoveC2SPacket.LookOnly(rotation.yaw, rotation.pitch, player.isOnGround))
+            player.networkHandler.sendPacket(PlayerMoveC2SPacket.LookAndOnGround(rotation.yaw, rotation.pitch, player.isOnGround))
 
-            if (slot != player.inventory.selectedSlot)
+            if (slot != player.inventory.selectedSlot) {
                 player.networkHandler.sendPacket(UpdateSelectedSlotC2SPacket(slot))
+            }
 
             player.networkHandler.sendPacket(PlayerInteractBlockC2SPacket(Hand.MAIN_HAND, rayTraceResult))
             val itemUsageContext = ItemUsageContext(player, Hand.MAIN_HAND, rayTraceResult)
@@ -98,11 +97,13 @@ object ModuleIgnite : Module("Ignite", Category.WORLD) {
                 actionResult = itemStack.useOnBlock(itemUsageContext)
             }
 
-            if (actionResult.shouldSwingHand())
+            if (actionResult.shouldSwingHand()) {
                 player.swingHand(Hand.MAIN_HAND)
+            }
 
-            if (slot != player.inventory.selectedSlot)
+            if (slot != player.inventory.selectedSlot) {
                 player.networkHandler.sendPacket(UpdateSelectedSlotC2SPacket(player.inventory.selectedSlot))
+            }
 
             break
         }

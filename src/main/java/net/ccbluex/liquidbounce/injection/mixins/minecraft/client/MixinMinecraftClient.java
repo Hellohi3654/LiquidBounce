@@ -19,6 +19,7 @@
 package net.ccbluex.liquidbounce.injection.mixins.minecraft.client;
 
 import net.ccbluex.liquidbounce.LiquidBounce;
+import net.ccbluex.liquidbounce.common.RenderingFlags;
 import net.ccbluex.liquidbounce.event.*;
 import net.minecraft.SharedConstants;
 import net.minecraft.client.MinecraftClient;
@@ -27,6 +28,7 @@ import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.client.resource.ClientBuiltinResourcePackProvider;
 import net.minecraft.client.resource.language.I18n;
+import net.minecraft.entity.Entity;
 import net.minecraft.resource.ResourceType;
 import net.minecraft.server.integrated.IntegratedServer;
 import net.minecraft.util.Identifier;
@@ -61,10 +63,9 @@ public abstract class MixinMinecraftClient {
     @Nullable
     private ServerInfo currentServerEntry;
 
-    @Shadow
-    public abstract ClientBuiltinResourcePackProvider getResourcePackDownloader();
-
     @Shadow private int itemUseCooldown;
+
+    @Shadow public abstract ClientBuiltinResourcePackProvider getResourcePackProvider();
 
     /**
      * Entry point of our hacked client
@@ -131,9 +132,9 @@ public abstract class MixinMinecraftClient {
             LiquidBounce.INSTANCE.getLogger().debug("Loading client icons");
 
             // Load client icons
-            final InputStream stream32 = getResourcePackDownloader().getPack().open(ResourceType.CLIENT_RESOURCES,
+            final InputStream stream32 = getResourcePackProvider().getPack().open(ResourceType.CLIENT_RESOURCES,
                     new Identifier("liquidbounce:icon_16x16.png"));
-            final InputStream stream64 = getResourcePackDownloader().getPack().open(ResourceType.CLIENT_RESOURCES,
+            final InputStream stream64 = getResourcePackProvider().getPack().open(ResourceType.CLIENT_RESOURCES,
                     new Identifier("liquidbounce:icon_32x32.png"));
 
             args.setAll(stream32, stream64);
@@ -150,7 +151,7 @@ public abstract class MixinMinecraftClient {
      * @param screen to be opened (null = no screen at all)
      * @param callbackInfo          callback
      */
-    @Inject(method = "openScreen", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "setScreen", at = @At("HEAD"), cancellable = true)
     private void hookScreen(Screen screen, CallbackInfo callbackInfo) {
         final ScreenEvent event = new ScreenEvent(screen);
         EventManager.INSTANCE.callEvent(event);
@@ -182,6 +183,13 @@ public abstract class MixinMinecraftClient {
         final UseCooldownEvent useCooldownEvent = new UseCooldownEvent(itemUseCooldown);
         EventManager.INSTANCE.callEvent(useCooldownEvent);
         itemUseCooldown = useCooldownEvent.getCooldown();
+    }
+
+    @Inject(method = "hasOutline", cancellable = true, at = @At("HEAD"))
+    private void injectOutlineESPFix(Entity entity, CallbackInfoReturnable<Boolean> cir) {
+        if (RenderingFlags.isCurrentlyRenderingEntityOutline().get()) {
+            cir.setReturnValue(true);
+        }
     }
 
 }

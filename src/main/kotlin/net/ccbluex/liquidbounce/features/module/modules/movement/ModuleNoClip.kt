@@ -26,9 +26,14 @@ import net.ccbluex.liquidbounce.features.module.Category
 import net.ccbluex.liquidbounce.features.module.Module
 import net.ccbluex.liquidbounce.utils.client.chat
 import net.ccbluex.liquidbounce.utils.client.regular
-import net.ccbluex.liquidbounce.utils.entity.moving
 import net.ccbluex.liquidbounce.utils.entity.strafe
 import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket
+
+/**
+ * NoClip module
+ *
+ * Allows you to fly through blocks.
+ */
 
 object ModuleNoClip : Module("NoClip", Category.MOVEMENT) {
 
@@ -40,9 +45,7 @@ object ModuleNoClip : Module("NoClip", Category.MOVEMENT) {
         player.isOnGround = false
 
         val speed = speed.toDouble()
-        if (player.moving) {
-            player.strafe(speed = speed)
-        }
+        player.strafe(speed = speed)
 
         player.velocity.y = when {
             mc.options.keyJump.isPressed -> speed
@@ -60,7 +63,7 @@ object ModuleNoClip : Module("NoClip", Category.MOVEMENT) {
     }
 
     override fun disable() {
-        mc.player?.noClip = false
+        player.noClip = false
     }
 
 }
